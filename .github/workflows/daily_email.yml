@@ -4,6 +4,7 @@ name: Run Daily Email Script
 on:
   schedule:
     - cron: "*/5 * * * *"  # 1:30 AM UTC (equivalent to 7 AM IST)
+  workflow_dispatch:
 
 jobs:
   run-script:
