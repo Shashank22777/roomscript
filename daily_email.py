@@ -1,55 +1,69 @@
+import pandas as pd
+import datetime
+import os
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import pandas as pd
-from datetime import datetime
 
-# Load the schedule from a CSV file (ensure the CSV matches the header format in your table)
-CSV_FILE = "task_schedule.csv"  # Rename this based on your file's name
-df = pd.read_csv(CSV_FILE)
+# 1. Fetch Email Credentials from GitHub Secrets or Environment Variables
+EMAIL = os.environ.get("EMAIL")  # Sender's email fetched securely
+PASSWORD = os.environ.get("PASSWORD")  # App password fetched securely
 
-# Email credentials and settings
-SMTP_SERVER = "smtp.gmail.com"  # Change to your SMTP server
-SMTP_PORT = 587
-EMAIL = "shashankbandari777@gmail.com"  # Replace with your email
-PASSWORD = "tlku brop vvhr avnn"  # Replace with your email password
+# 2. File Path to the CSV Schedule (Ensure it's in the same repo with this script)
+CSV_FILE = "task_schedule.csv"
 
-def send_email(to_email, subject, body):
-    try:
+# 3. Load the task schedule from the CSV
+try:
+    df = pd.read_csv(CSV_FILE)
+except FileNotFoundError:
+    print("Error: The CSV file was not found.")
+    exit(1)
+
+# 4. Get Today's Date in the format used in the CSV
+today = datetime.datetime.now().strftime("%a %d %b")
+
+# 5. Filter for Today's Tasks
+today_tasks = df[df["Date"] == today]
+
+# 6. Check if there are tasks for today
+if today_tasks.empty:
+    print("No tasks scheduled for today!")
+else:
+    # Go through each task column and send tasks to the assigned person
+    for column in today_tasks.columns[1:]:  # Skip the "Date" column
+        task_description = column
+        recipient_info = today_tasks[column].values[0]  # Fetch recipient from the column
+
+        # Parse recipient's name and email from the cell (e.g., "Shashank (Shashankbandari777@gmail.com)")
+        try:
+            recipient_name, recipient_email = recipient_info.split("(")
+            recipient_email = recipient_email.strip(")")  # Clean up the email
+        except ValueError:
+            print(f"Error parsing recipient info: {recipient_info}")
+            continue
+
+        # Prepare the email content
+        subject = f"Task Reminder: {task_description}"
+        body = f"""
+        Hello {recipient_name.strip()},\n\n
+        Here is your assigned task for today ({today}):\n
+        Task: {task_description}\n\n
+        Please ensure it's completed today.\n\n
+        Thank you!
+        """
+
         # Set up the email
-        msg = MIMEMultipart()
-        msg["From"] = EMAIL
-        msg["To"] = to_email
+        msg = MIMEText(body)
         msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
+        msg["From"] = EMAIL
+        msg["To"] = recipient_email
 
-        # Establish SMTP connection and send the email
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(EMAIL, PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        print(f"Email sent to {to_email}")
-    except Exception as e:
-        print(f"Failed to send email to {to_email}. Error: {e}")
-
-def send_daily_emails():
-    # Get today's date in the format used in the CSV (e.g., "Sun 06 Apr")
-    today = datetime.now().strftime("%a %d %b")
-    if today not in df["Date"].values:
-        print("No tasks scheduled for today.")
-        return
-
-    # Filter today's tasks
-    tasks_today = df[df["Date"] == today]
-
-    # Iterate through columns and send emails accordingly
-    for task in tasks_today.columns[1:]:  # Skip the 'Date' column
-        email = tasks_today[task].values[0]
-        task_description = task
-        subject = "Daily Task Reminder"
-        body = f"Good morning!\n\nHere is your task for today:\n\n{task_description}\n\nHave a productive day!"
-        send_email(email, subject, body)
-
-# Schedule this function to run daily at 7 AM IST
-send_daily_emails()
+        # 7. Send Email via Gmail SMTP
+        try:
+            print(f"Sending task reminder to {recipient_name.strip()} ({recipient_email})...")
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                server.starttls()  # Secure the connection
+                server.login(EMAIL, PASSWORD)  # Log in to the SMTP server
+                server.sendmail(EMAIL, recipient_email, msg.as_string())
+                print(f"Task reminder sent successfully to {recipient_name.strip()}!")
+        except Exception as e:
+            print(f"Failed to send email to {recipient_email}. Error: {e}")
