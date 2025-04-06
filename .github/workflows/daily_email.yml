@@ -3,7 +3,7 @@ name: Run Daily Email Script
 # Schedule the script to run daily at 7 AM IST
 on:
   schedule:
-    - cron: "30 1 * * *"  # 1:30 AM UTC (equivalent to 7 AM IST)
+    - cron: "* * * * *"  # 1:30 AM UTC (equivalent to 7 AM IST)
 
 jobs:
   run-script:
